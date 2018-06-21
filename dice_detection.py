@@ -50,27 +50,28 @@ des_list = []
 def load_keypoint():
     global keypoints, des_list
     img_list = []
-    five =  os.listdir(CONST.CONNECTED_LINE_PATH+'5/')
-    six = os.listdir(CONST.CONNECTED_LINE_PATH+'6/')
+    five = os.listdir(CONST.CONNECTED_LINE_PATH + '5/')
+    six = os.listdir(CONST.CONNECTED_LINE_PATH + '6/')
 
     for name in five:
-        img = cv.imread(CONST.CONNECTED_LINE_PATH+'5/'+name,1)
-        gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
-        sift = cv.xfeatures2d.SIFT_create()        
+        img = cv.imread(CONST.CONNECTED_LINE_PATH + '5/' + name, 1)
+        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        sift = cv.xfeatures2d.SIFT_create()
         kp, des = sift.detectAndCompute(gray, None)
-        keypoints.append([5,kp])  
-        des_list.append([5,des])
+        keypoints.append([5, kp])
+        des_list.append([5, des])
         # img=cv.drawKeypoints(gray,kp,img,flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         # cv.imshow('img',img)
         # cv.waitKey(-1)
 
     for name in six:
-        img = cv.imread(CONST.CONNECTED_LINE_PATH+'6/'+name,1)
-        gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
-        sift = cv.xfeatures2d.SIFT_create()        
+        img = cv.imread(CONST.CONNECTED_LINE_PATH + '6/' + name, 1)
+        gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+        sift = cv.xfeatures2d.SIFT_create()
         kp, des = sift.detectAndCompute(gray, None)
-        keypoints.append([6,kp])  
-        des_list.append([6,des])
+        keypoints.append([6, kp])
+        des_list.append([6, des])
+
 
 def sift_matching(mask):
     global des_list
@@ -142,6 +143,9 @@ def what_is_point(mask):
     _, contours, hierarchy = cv.findContours(
         mask, cv.RETR_TREE, cv.CHAIN_APPROX_NONE)
 
+    if hierarchy is None:
+        return None, None
+
     hierarchy = hierarchy[0]
 
     x, y, width, height = 0, 0, 0, 0
@@ -160,6 +164,8 @@ def what_is_point(mask):
                           CONST.DICE_SIZE, CONST.DICE_SIZE]])
         M = cv.getAffineTransform(pts1[:-1], pts2[:-1])
         mask = cv.warpAffine(mask, M, (cols, rows))
+        cv.imwrite(CONST.IMG_PATH + 'roi/dice_' + '_' +
+                       str(x + width+ y + height) + '.jpg', mask)
         predict_dice, accuracy = sift_matching(mask)
         return predict_dice, accuracy
     else:
@@ -205,13 +211,14 @@ def find_dice(mask, circles):
             # print(count, dice)
             # if count > dice:
             #     continue
-            dice, accuracy = what_is_point(mask_dice)
+            dice, accuracy = what_is_point(roi)
             if dice is None:
+                continue
+            if accuracy < 0.75:
                 continue
             center = (int((left + right) / 2) - int(mask_extend_size / 2),
                       int((top + bottom) / 2) - int(mask_extend_size / 2))
-            cv.imwrite(CONST.IMG_PATH + 'roi/dice_' + '_' +
-                       str(top + left + bottom + right) + '.jpg', roi)
+            
             data_list.append([center, radius, dice, accuracy])
     data_dict = remove_redundant_dice(data_list)
     return data_dict
@@ -235,8 +242,9 @@ def remove_redundant_dice(data):
     result = {'5': None, '6': None}
     data = sorted(data, key=itemgetter(2))
     for d in data:
+        print(d)
         index_dict = str(d[2])
-        if result[index_dict] is None or result[index_dict][3] < d[5]:
+        if result[index_dict] is None or result[index_dict][3] < d[3]:
             result[index_dict] = d
 
     return result
@@ -245,12 +253,15 @@ def remove_redundant_dice(data):
 def is_circle(area_ratio, len_approx, hierarchy):
     area_ratio_expected = 0.65
     len_approx_expected = 7
-    hierarchy_expected = np.array([0, 0, -1, -1], np.uint8)
-    hierarchy = np.array(hierarchy)
-    if area_ratio < area_ratio_expected or \
-            len_approx < len_approx_expected or \
-            not hierarchy == hierarchy_expected:
+    hierarchy_expected = [-1, -1]
+    hierarchy = list(hierarchy[2:]) 
+
+    if  (area_ratio < area_ratio_expected or 
+        len_approx < len_approx_expected or 
+        not (hierarchy == hierarchy_expected)):
+        print('false')
         return False
+    print('true')
     return True
 
 
@@ -266,7 +277,7 @@ def find_point(img_bin):
         area_cnt = cv.contourArea(cnt)
         if len(cnt) < 5 or area_cnt > (r * c) * 0.05:
             continue
-
+        print('state 1')
         approx = cv.approxPolyDP(cnt, 0.01 * cv.arcLength(cnt, True), True)
         len_approx = len(approx)
 
@@ -278,7 +289,8 @@ def find_point(img_bin):
 
         if not is_circle(area_ratio, len_approx, h):
             continue
-
+        print('state 2')
+        
         radius = int(radius)
         result_data.append([x, y, radius])
         cv.circle(result, center, radius, (255, 255, 255), -1)
@@ -323,14 +335,15 @@ def pre_processing(img_bgr):
 def find_mask_threshold(img_bgr):
     global mask_extend_size
     gray = cv.cvtColor(img_bgr, cv.COLOR_BGR2GRAY)
+    r, c = gray.shape
 
     hsv = cv.cvtColor(img_bgr, cv.COLOR_BGR2HSV)
     h, s, v = cv.split(hsv)
     v_avg = np.average(v)
 
     _, mask = cv.threshold(gray, v_avg / 1.5, 255, cv.THRESH_BINARY_INV)
-    erode = cv.erode(mask, get_kernel('rect', (5, 5)))
-    mask = cv.dilate(erode, get_kernel('rect', (5, 5)))
+    erode = cv.erode(mask, get_kernel('rect', (3, 3)))
+    mask = cv.dilate(erode, get_kernel('rect', (3, 3)))
 
     tmp = np.zeros((r + 80, c + 80), np.uint8)
     tmp[40:-40, 40:-40] = mask
@@ -340,12 +353,15 @@ def find_mask_threshold(img_bgr):
 
 
 def mask_dice(dict):
-    global img_result
+    global img_result, mask_extend_size
     color = {'2': (255, 0, 0), '5': (0, 255, 0), '6': (0, 0, 255)}
     for d in dict.keys():
         if dict[d] is None:
             continue
-        center, radius, dice = dict[d]
+        center, radius, dice, accuracy = dict[d]
+        x,y = center
+        x -= int(mask_extend_size/2)
+        y -= int(mask_extend_size/2)
         cv.circle(img_result, center, radius, color[d], -1)
         cv.circle(img_result, center, radius * 9, color[d], 2)
         font = cv.FONT_HERSHEY_SIMPLEX
@@ -355,18 +371,22 @@ def mask_dice(dict):
 
 
 def run(img):
+    global img_result
     img = pre_processing(img)
     mask_th = find_mask_threshold(img)
     mask_circles, circles = find_point(mask_th)
-    # cv.imshow('mask', mask)
-    # cv.imshow('mask_result', mask_result)
+    cv.imshow('mask_th', mask_th)
     dice_dict = find_dice(mask_circles, circles)
+    cv.imshow('mask_cir', mask_circles)
     mask_dice(dice_dict)
+    cv.imshow('result', img_result)
+    cv.waitKey(1)
 
 
 def main():
     global img_result
     # load_pattern()
+    load_keypoint()
     cap = cv.VideoCapture(CONST.VDO_PATH + 'dice_02.mp4')
 
     while cap.isOpened():
@@ -385,7 +405,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # main()
-    load_keypoint()
-    img = cv.imread(CONST.CONNECTED_LINE_PATH+'6/dice-6-line-43.jpg',0)
-    sift_matching(img)
+    main()
