@@ -4,10 +4,11 @@
     Date created: 05/25/2018
     Python Version: 3.6.1
 '''
-import cv2 as cv
+import os
 import csv
-import numpy as np
+import cv2 as cv
 from lib import *
+import numpy as np
 from operator import itemgetter
 
 '''
@@ -17,7 +18,8 @@ from operator import itemgetter
 # pattern_predict = []
 img_result = None
 mask_extend_size = 80
-
+keypoints = []
+des_list = []
 '''
     Rewrite Code: old code
 '''
@@ -45,6 +47,52 @@ mask_extend_size = 80
 #         return True, result
 #     else:
 #         return False, None
+def load_keypoint():
+    global keypoints, des_list
+    img_list = []
+    five =  os.listdir(CONST.CONNECTED_LINE_PATH+'5/')
+    six = os.listdir(CONST.CONNECTED_LINE_PATH+'6/')
+
+    for name in five:
+        img = cv.imread(CONST.CONNECTED_LINE_PATH+'5/'+name,1)
+        gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
+        sift = cv.xfeatures2d.SIFT_create()        
+        kp, des = sift.detectAndCompute(gray, None)
+        keypoints.append([5,kp])  
+        des_list.append([5,des])
+        # img=cv.drawKeypoints(gray,kp,img,flags=cv.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
+        # cv.imshow('img',img)
+        # cv.waitKey(-1)
+
+    for name in six:
+        img = cv.imread(CONST.CONNECTED_LINE_PATH+'6/'+name,1)
+        gray = cv.cvtColor(img,cv.COLOR_BGR2GRAY)
+        sift = cv.xfeatures2d.SIFT_create()        
+        kp, des = sift.detectAndCompute(gray, None)
+        keypoints.append([6,kp])  
+        des_list.append([6,des])
+
+def sift_matching(mask):
+    global des_list
+    accuracy_max = 0.0
+    predict_dice = 0
+
+    for (dice, des) in des_list:
+        sift = cv.xfeatures2d.SIFT_create()
+
+        kp, des1 = sift.detectAndCompute(mask, None)
+        bf = cv.BFMatcher()
+        matches = bf.knnMatch(des1, des, k=2)
+        good = []
+        for m, n in matches:
+            if m.distance < 0.75 * n.distance:
+                good.append([m])
+        accuracy = float(len(good)) / len(matches)
+        if accuracy > accuracy_max:
+            accuracy_max = accuracy
+            predict_dice = dice
+
+    return predict_dice, accuracy_max
 
 
 def get_region(dice_size, x, y, radius):
@@ -103,7 +151,7 @@ def what_is_point(mask):
                 x, y, width, height = cv.boundingRect(cnt)
                 cv.drawContours(mask_result, cnt, -1, (155, 155, 155), 2)
     else:
-        return None
+        return None, None
     rows, cols = mask.shape
     if x + y + width + height > 0:
         pts1 = np.float32(
@@ -112,17 +160,17 @@ def what_is_point(mask):
                           CONST.DICE_SIZE, CONST.DICE_SIZE]])
         M = cv.getAffineTransform(pts1[:-1], pts2[:-1])
         mask = cv.warpAffine(mask, M, (cols, rows))
+        predict_dice, accuracy = sift_matching(mask)
+        return predict_dice, accuracy
     else:
-        return None
+        return None, None
 
-    cv.imshow('mask_point', mask)
-    cv.imshow('mask_result1', mask_result)
-    cv.waitKey(-1)
+    # cv.imshow('mask_point', mask)
+    # cv.imshow('mask_result1', mask_result)
+    # cv.waitKey(-1)
 
     # cv.waitKey(-1)
-    print(result)
-
-    return result, accuracy
+    # print(result)
 
 
 def find_dice(mask, circles):
@@ -158,6 +206,8 @@ def find_dice(mask, circles):
             # if count > dice:
             #     continue
             dice, accuracy = what_is_point(mask_dice)
+            if dice is None:
+                continue
             center = (int((left + right) / 2) - int(mask_extend_size / 2),
                       int((top + bottom) / 2) - int(mask_extend_size / 2))
             cv.imwrite(CONST.IMG_PATH + 'roi/dice_' + '_' +
@@ -335,4 +385,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    # main()
+    load_keypoint()
