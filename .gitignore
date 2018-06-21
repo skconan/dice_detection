@@ -112,3 +112,7 @@ venv.bak/
 # image
 # *.jpg
 #.png
+
+# video
+
+/videos
