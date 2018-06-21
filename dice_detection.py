@@ -91,7 +91,7 @@ def sift_matching(mask):
         if accuracy > accuracy_max:
             accuracy_max = accuracy
             predict_dice = dice
-
+    print(predict_dice, accuracy_max)
     return predict_dice, accuracy_max
 
 
@@ -387,3 +387,5 @@ def main():
 if __name__ == '__main__':
     # main()
     load_keypoint()
+    img = cv.imread(CONST.CONNECTED_LINE_PATH+'6/dice-6-line-43.jpg',0)
+    sift_matching(img)
