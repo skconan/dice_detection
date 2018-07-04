@@ -53,7 +53,7 @@ def load_pattern():
 
 def matching(pattern):
     global pattern_list, pattern_predict
-    
+
     print('MATCHING Process...')
     not_match = False, 0, 0
     if np.count_nonzero(pattern) < 3:
@@ -63,6 +63,7 @@ def matching(pattern):
             return True, res[0], res[1]
     return not_match
     print('MATCHING END')
+
 
 '''
     > Get region
@@ -79,32 +80,32 @@ def get_region(x, y, w, h):
     print('GET REGION PROCESS...')
 
     dice_w, dice_h = int(
-        w / 2 * CONST.SIDE_PER_RADIUS), int(h / 2 * CONST.SIDE_PER_RADIUS)
-    a, b = 2, 2
+        h / 2.0 * CONST.SIDE_PER_RADIUS), int(h / 2.0 * CONST.SIDE_PER_RADIUS)
+    a, b = 1, 1
     region = []
     top = int(y - int(0.5 * h)) - a
     left = int(x - int(0.5 * w)) - a
     bottom = top + dice_h + b
     right = left + dice_w + b
     region.append([top, left, bottom, right])
-    cv.rectangle(img_result, (left - 40, top - 40),
-                 (right - 40, bottom - 40), (255, 0, 0), 1)
+    # cv.rectangle(img_result, (left - 40, top - 40),
+    #              (right - 40, bottom - 40), (255, 0, 0), 1)
 
-    bottom = int(y + int(0.5 * h)) + a
-    right = int(x + int(0.5 * w)) + a
-    top = bottom - dice_h - b
-    left = right - dice_w - b
+    bottom = int(y + int(0.5 * h)) + b
+    right = int(x + int(0.5 * w)) + b
+    top = bottom - dice_h - a
+    left = right - dice_w - a
     region.append([top, left, bottom, right])
-    cv.rectangle(img_result, (left - 40, top - 40),
-                 (right - 40, bottom - 40), (0, 255, 0), 1)
+    # cv.rectangle(img_result, (left - 40, top - 40),
+    #              (right - 40, bottom - 40), (0, 255, 0), 1)
 
-    bottom = int(y + dice_h / 2.) + a
-    right = int(x + dice_w / 2.) + a
-    top = int(y - dice_h / 2.) - b
-    left = int(x - dice_w / 2.) - b
-    region.append([top, left, bottom, right])
-    cv.rectangle(img_result, (left - 40, top - 40),
-                 (right - 40, bottom - 40), (0, 0, 255), 1)
+    # bottom = int(y + dice_h / 2.) + b
+    # right = int(x + dice_w / 2.) + b
+    # top = int(y - dice_h / 2.) - a
+    # left = int(x - dice_w / 2.) - a
+    # region.append([top, left, bottom, right])
+    # cv.rectangle(img_result, (left - 40, top - 40),
+    #              (right - 40, bottom - 40), (0, 0, 255), 1)
 
     print('GET REGION END')
 
@@ -173,7 +174,7 @@ def find_dice(mask, circles):
         # Interger
         x, y, w, h = cir
         region_list = get_region(x, y, w, h)
-
+        res_mask = mask.copy()
         for region in region_list:
             top, left, bottom, right = region
             roi = mask.copy()[top:bottom, left:right]
@@ -181,7 +182,6 @@ def find_dice(mask, circles):
                 roi = cv.resize(roi, (CONST.DICE_SIZE, CONST.DICE_SIZE))
             except:
                 continue
-            # roi = mask.copy()[top:bottom, left:right]
             t = time.time()
 
             point = what_is_pattern(roi)
@@ -189,19 +189,28 @@ def find_dice(mask, circles):
 
             if is_match == False:
                 continue
+            cv.rectangle(res_mask, (left, top),(right, bottom), (255), 2)
+
+            extend = mask_extend_size/2.0 
+            top, left, bottom, right = top - extend, left - extend, bottom - extend, right - extend
+            top, left, bottom, right = int(top), int(left), int(bottom), int(right)
+            center = (int((left + right) / 2.0) ,int((top + bottom) / 2.0))
+
+            cv.rectangle(img_result, (left, top),(right, bottom), (0, 255, 255), 1)
+
+            data_list.append([center, int(max(w,h)/2.0), dice, np.count_nonzero(point)])
+
+            ########### SAVE ROI THAT IS MAYBE DICE #########
             prefix = 'dice-point-' + str(dice) + '-'
             print(dice, no)
             img_no = cv.imread(CONST.POINT_PATH + str(dice) +
                                '/' + prefix + str(no) + '.jpg', 0)
             roi = cv.resize(roi, (90, 90))
-
             cv.imwrite(CONST.IMG_PATH + 'roi/dice_' + str(t) +
                        '.jpg', np.concatenate((roi, img_no), axis=1))
-            center = (int((left + right) / 2) - int(mask_extend_size / 2),
-                      int((top + bottom) / 2) - int(mask_extend_size / 2))
-            cv.rectangle(img_result, (left - 40, top - 40),
-                         (right - 40, bottom - 40), (0, 255, 255), 1)
-            data_list.append([center, 0, dice, np.count_nonzero(point)])
+            #########################################################
+            cv.imshow('mask',res_mask)
+            cv.waitKey(1)
     data_dict = remove_redundant_dice(data_list)
     return data_dict
 
@@ -234,7 +243,7 @@ def is_point(contour, hierarchy):
         - Solidity is the ratio of contour area to its convex hull area.
     '''
     ############################ Expected Value ##################################
-    area_upper = CONST.POINT_AREA_UPPER 
+    area_upper = CONST.POINT_AREA_UPPER
     area_lower = CONST.POINT_AREA_LOWER * 0.1
     hierarchy_expected = [-1, -1]
     area_ratio_expected = 0.6
@@ -296,7 +305,7 @@ def is_point(contour, hierarchy):
 
 def find_point(img_bin):
     global img_result, mask_extend_size
-    print('')
+    print('Find POint')
     r, c = img_bin.shape
     result = np.zeros((r, c), np.uint8)
     result_data = []
@@ -309,11 +318,15 @@ def find_point(img_bin):
             continue
         (x, y), (w, h), angle = ellipse = cv.fitEllipse(cnt)
         result_data.append([x, y, w, h])
+        cv.ellipse(result, ellipse, (255, 255, 255), -1)
+
+        ################ DISPLAY ###########################
         x -= int(mask_extend_size / 2.)
         y -= int(mask_extend_size / 2.)
         ellipse = (x, y), (w, h), angle
-        cv.ellipse(result, ellipse, (255, 255, 255), -1)
         cv.ellipse(img_result, ellipse, (255, 255, 255), -1)
+        ####################################################
+
     return result, result_data
 
 
@@ -338,12 +351,16 @@ def find_mask_threshold(img_bgr):
 
     img_result[mask < 127] = 100
 
-    tmp = np.zeros((r + 80, c + 80), np.uint8)
-    tmp[40:-40, 40:-40] = mask
-    mask = tmp
+    tmp = np.zeros((r + mask_extend_size, c + mask_extend_size), np.uint8)
+    extend = int(mask_extend_size / 2.0)
+    print(tmp.shape)
+    print(mask.shape)
+    tmp[extend:-extend, extend:-extend] = mask
+    print(tmp.shape)
+
     print('FIND MASK THRESH END')
 
-    return mask
+    return tmp
 
 
 def mask_dice(dict):
@@ -353,25 +370,31 @@ def mask_dice(dict):
         if dict[d] is None:
             continue
         center, radius, dice, accuracy = dict[d]
-        x, y = center
-        x -= int(mask_extend_size / 2)
-        y -= int(mask_extend_size / 2)
         cv.circle(img_result, center, radius, color[d], -1)
         cv.circle(img_result, center, radius * 9, color[d], 2)
         font = cv.FONT_HERSHEY_SIMPLEX
         cv.putText(img_result, str(dice), center,
                    font, 1, color[d], 2, cv.LINE_AA)
-        cv.imshow('image_result', img_result)
+        # cv.imshow('image_result', img_result)
 
 
 def run(img):
     global img_result, table_position
+    '''
+        Enhancement BGR image in pre_processing() before do anything.
+        mask_th is the result of grayscale that have color value less than threshold and extend the frame.
+        mask_circles is the binary image that (only) have a circle(s).
+        circles is x, y, w, h, and angle of each circle(s) in mask_circle(s) (extend) 
+    '''
     img = pre_processing(img)
     mask_th = find_mask_threshold(img)
     mask_circles, circles = find_point(mask_th)
-    # cv.imshow('mask_th', mask_th)
+    
+    '''
+        mask_circles
+    '''
+
     dice_dict = find_dice(mask_circles, circles)
-    # cv.imshow('mask_cir', mask_circles)
     mask_dice(dice_dict)
     cv.imshow('result', img_result)
     cv.waitKey(1)
@@ -381,8 +404,8 @@ def main():
     global img_result, table_position
     load_pattern()
     table_position = create_table_position()
-  
-    cap = cv.VideoCapture(CONST.VDO_PATH + 'dice_05.mp4')
+
+    cap = cv.VideoCapture(CONST.VDO_PATH + 'dice_11.mp4')
     while cap.isOpened():
         ret, frame = cap.read()
         if frame is None:
