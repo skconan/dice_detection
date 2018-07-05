@@ -44,6 +44,10 @@ def create_table_position():
                 int(i >= 0) + 3 * int(i >= 20) + 3 *
                 int(i >= 40) + int(j >= 20) + int(j >= 40) - 1
             )
+            if 0 <= i <= 1 or 18 <= i <= 21 or 38 <= i <= 41 or i>= 59:
+                table_position[i][j] = -1
+            if 0 <= j <= 1 or 18 <= j <= 21 or 38 <= j <= 41 or j>= 59:
+                table_position[i][j] = -1
 
     return table_position
 
