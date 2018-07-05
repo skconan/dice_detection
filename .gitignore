@@ -4,7 +4,7 @@ __pycache__/
 *$py.class
 
 # Addition
-*.csv
+# *.csv
 .DS_Store
 
 # C extensions
